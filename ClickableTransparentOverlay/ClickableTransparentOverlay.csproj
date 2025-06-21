@@ -6,10 +6,11 @@
     <Nullable>enable</Nullable>
     <NoWin32Manifest>true</NoWin32Manifest>
     <AllowUnsafeBlocks>True</AllowUnsafeBlocks>
-    <Description>A library to create transparent overlays on the windows machines.</Description>
-    <PackageProjectUrl>https://github.com/zaafar/ClickableTransparentOverlay</PackageProjectUrl>
-    <RepositoryUrl>https://github.com/zaafar/ClickableTransparentOverlay</RepositoryUrl>
-    <Version>11.1.0</Version>
+    <Description>A library to create transparent overlays on the windows machines. Modified version, initial version by zaafar.</Description>
+    <PackageProjectUrl>https://github.com/iXab3r/ClickableTransparentOverlay</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/iXab3r/ClickableTransparentOverlay</RepositoryUrl>
+    <PackageId>EyeAuras.ClickableTransparentOverlay</PackageId>
+    <Version>11.1.4</Version>
     <PackageLicenseFile>LICENSE</PackageLicenseFile>
     <IncludeSymbols>true</IncludeSymbols>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
