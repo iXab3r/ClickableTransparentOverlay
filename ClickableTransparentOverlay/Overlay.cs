@@ -40,6 +40,7 @@
         ///  Consider using this variable only in <see cref="PostInitialized"/> or <see cref="Render"/> function.
         /// </summary>
         public Win32Window window;
+
         private ID3D11Device device;
         private ID3D11DeviceContext deviceContext;
         private IDXGISwapChain swapChain;
@@ -163,17 +164,17 @@
                 User32.SetProcessDPIAware();
             }
         }
-        
+
         /// <summary>
         /// Gets or sets a value indicating whether the window should be click-through (i.e., not interactable).
         /// </summary>
         public bool IsClickable { get; set; } = true;
-        
+
         /// <summary>
         /// Gets or sets a value indicating whether the window should appear in the taskbar.
         /// </summary>
         public bool ShowInTaskbar { get; set; } = true;
-        
+
         /// <summary>
         /// Gets or sets a value indicating whether the window should NOT be activated when clicked
         /// </summary>
@@ -318,8 +319,11 @@
         public unsafe bool ReplaceFont(FontHelper.FontLoadDelegate fontLoadDelegate)
         {
             // have to do this because of issue: https://github.com/ocornut/imgui/issues/6858
-            ImGuiNative.igGetIO()->FontDefault = null;
-            this.fontUpdates.Enqueue(fontLoadDelegate);
+            this.fontUpdates.Enqueue(config =>
+            {
+                ImGuiNative.igGetIO()->FontDefault = null;
+                fontLoadDelegate(config);
+            });
             return true;
         }
 
@@ -362,10 +366,7 @@
         /// </summary>
         public Point Position
         {
-            get
-            {
-                return this.window.Dimensions.Location;
-            }
+            get { return this.window.Dimensions.Location; }
 
             set
             {
@@ -382,10 +383,7 @@
         /// </summary>
         public Size Size
         {
-            get
-            {
-                return this.window.Dimensions.Size;
-            }
+            get { return this.window.Dimensions.Size; }
             set
             {
                 if (this.window.Dimensions.Size != value)
@@ -432,8 +430,8 @@
                 decorderOptions.Configuration.PreferContiguousImageBuffers = true;
                 using var image = Image.Load<Rgba32>(decorderOptions, filePath);
                 handle = this.renderer.CreateImageTexture(image, srgb ? Format.R8G8B8A8_UNorm_SRgb : Format.R8G8B8A8_UNorm);
-                width = (uint)image.Width;
-                height = (uint)image.Height;
+                width = (uint) image.Width;
+                height = (uint) image.Height;
                 this.loadedTexturesPtrs.Add(filePath, new(handle, width, height));
             }
         }
@@ -457,7 +455,7 @@
             else
             {
                 handle = this.renderer.CreateImageTexture(image, srgb ? Format.R8G8B8A8_UNorm_SRgb : Format.R8G8B8A8_UNorm);
-                this.loadedTexturesPtrs.Add(name, new(handle, (uint)image.Width, (uint)image.Height));
+                this.loadedTexturesPtrs.Add(name, new(handle, (uint) image.Width, (uint) image.Height));
             }
         }
 
@@ -493,7 +491,7 @@
                 }
 
                 this.renderThread?.Join();
-                foreach(var key in this.loadedTexturesPtrs.Keys.ToArray())
+                foreach (var key in this.loadedTexturesPtrs.Keys.ToArray())
                 {
                     this.RemoveImage(key);
                 }
@@ -545,7 +543,7 @@
             var sleepTimeMs = 0;
             while (!token.IsCancellationRequested)
             {
-                currentTimeSec = stopwatch.ElapsedTicks / (float)Stopwatch.Frequency;
+                currentTimeSec = stopwatch.ElapsedTicks / (float) Stopwatch.Frequency;
                 stopwatch.Restart();
                 this.window.PumpEvents();
                 Utils.SetOverlayClickable(this.window.Handle, this.inputhandler.Update(), ref isClickable);
@@ -563,8 +561,8 @@
                 {
                     this.swapChain.Present(0, PresentFlags.None);
                     delayMs = 1000f / this.FPSLimit;
-                    currentTimeSec = stopwatch.ElapsedTicks / (float)Stopwatch.Frequency;
-                    sleepTimeMs = (int)(delayMs - (currentTimeSec * 1000));
+                    currentTimeSec = stopwatch.ElapsedTicks / (float) Stopwatch.Frequency;
+                    sleepTimeMs = (int) (delayMs - (currentTimeSec * 1000));
                     if (sleepTimeMs > 0)
                     {
                         Thread.Sleep(sleepTimeMs);
@@ -592,7 +590,7 @@
 
         private void OnResize(int width, int height)
         {
-            if (renderView == null)//first show
+            if (renderView == null) //first show
             {
                 using var dxgiFactory = device.QueryInterface<IDXGIDevice>().GetParent<IDXGIAdapter>().GetParent<IDXGIFactory>();
                 var swapchainDesc = new SwapChainDescription()
@@ -632,7 +630,7 @@
                 null,
                 DriverType.Hardware,
                 DeviceCreationFlags.None,
-                new[] { FeatureLevel.Level_10_0 },
+                new[] {FeatureLevel.Level_10_0},
                 out this.device,
                 out this.deviceContext);
             this.selfPointer = Kernel32.GetModuleHandle(null);
@@ -647,7 +645,7 @@
                 IconHandle = IntPtr.Zero,
                 MenuName = string.Empty,
                 ClassName = this.title,
-                SmallIconHandle= IntPtr.Zero,
+                SmallIconHandle = IntPtr.Zero,
                 ClassExtraBytes = 0,
                 WindowExtraBytes = 0
             };
@@ -683,11 +681,11 @@
                     this.OnResize(this.window.Dimensions.Width, this.window.Dimensions.Height);
                     break;
                 case WindowMessage.Size:
-                    switch ((SizeMessage)wParam)
+                    switch ((SizeMessage) wParam)
                     {
                         case SizeMessage.SIZE_RESTORED:
                         case SizeMessage.SIZE_MAXIMIZED:
-                            var lp = (int)lParam;
+                            var lp = (int) lParam;
                             this.OnResize(Utils.Loword(lp), Utils.Hiword(lp));
                             break;
                         default:
@@ -713,9 +711,9 @@
                 {
                     return new IntPtr(User32.MA_NOACTIVATE);
                 }
-                
-                if (this.inputhandler.ProcessMessage((WindowMessage)msg, wParam, lParam) ||
-                    this.ProcessMessage((WindowMessage)msg, wParam, lParam))
+
+                if (this.inputhandler.ProcessMessage((WindowMessage) msg, wParam, lParam) ||
+                    this.ProcessMessage((WindowMessage) msg, wParam, lParam))
                 {
                     return IntPtr.Zero;
                 }

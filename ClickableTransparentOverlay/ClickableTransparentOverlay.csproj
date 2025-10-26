@@ -10,7 +10,7 @@
     <PackageProjectUrl>https://github.com/iXab3r/ClickableTransparentOverlay</PackageProjectUrl>
     <RepositoryUrl>https://github.com/iXab3r/ClickableTransparentOverlay</RepositoryUrl>
     <PackageId>EyeAuras.ClickableTransparentOverlay</PackageId>
-    <Version>11.1.4</Version>
+    <Version>11.1.5</Version>
     <PackageLicenseFile>LICENSE</PackageLicenseFile>
     <IncludeSymbols>true</IncludeSymbols>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
