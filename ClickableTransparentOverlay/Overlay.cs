@@ -32,6 +32,8 @@
         private readonly int initialWindowHeight;
         private readonly Dictionary<string, (IntPtr Handle, uint Width, uint Height)> loadedTexturesPtrs;
         private readonly ConcurrentQueue<FontHelper.FontLoadDelegate> fontUpdates;
+        private readonly ConcurrentQueue<Action> preRenderActions;
+        private readonly ConcurrentQueue<Action> postRenderActions;
 
         private WNDCLASSEX wndClass;
 
@@ -159,6 +161,8 @@
             this.format = Format.R8G8B8A8_UNorm;
             this.loadedTexturesPtrs = new();
             this.fontUpdates = new();
+            this.preRenderActions = new();
+            this.postRenderActions = new();
             if (DPIAware)
             {
                 User32.SetProcessDPIAware();
@@ -310,6 +314,25 @@
             });
 
             return true;
+        }
+
+        /// <summary>
+        /// Runs specified action exactly once AFTER the frame is rendered.
+        /// Font updates are executed right afterward
+        /// </summary>
+        /// <param name="action"></param>
+        public void RunPostRenderOnce(Action action)
+        {
+            postRenderActions.Enqueue(action);
+        }
+        
+        /// <summary>
+        /// Runs specified action exactly once BEFORE frame is rendered
+        /// </summary>
+        /// <param name="action"></param>
+        public void RunPreRenderOnce(Action action)
+        {
+            preRenderActions.Enqueue(action);
         }
 
         /// <summary>
@@ -498,6 +521,8 @@
 
                 this.cancellationTokenSource?.Dispose();
                 this.fontUpdates?.Clear();
+                this.preRenderActions?.Clear();
+                this.postRenderActions?.Clear();
                 this.swapChain?.Release();
                 this.backBuffer?.Release();
                 this.renderView?.Release();
@@ -549,6 +574,9 @@
                 Utils.SetOverlayClickable(this.window.Handle, this.inputhandler.Update(), ref isClickable);
                 Utils.SetShowInTaskbar(this.window.Handle, ShowInTaskbar, ref showInTaskbar);
                 Utils.SetNoActivate(this.window.Handle, NoActivate, ref noActivate);
+
+                this.RunPreRenderActions();
+                
                 this.renderer.Update(currentTimeSec, () => { Render(); });
                 this.deviceContext.OMSetRenderTargets(renderView);
                 this.deviceContext.ClearRenderTargetView(renderView, clearColor);
@@ -573,18 +601,47 @@
                     this.swapChain.Present(0, PresentFlags.None); // Present without vsync
                 }
 
+                this.RunPostRenderActions();
                 this.ReplaceFontIfRequired();
             }
         }
 
         private void ReplaceFontIfRequired()
         {
-            if (this.renderer != null)
+            if (this.renderer == null)
             {
-                while (this.fontUpdates.TryDequeue(out var update))
-                {
-                    this.renderer.UpdateFontTexture(update);
-                }
+                return;
+            }
+
+            while (this.fontUpdates.TryDequeue(out var update))
+            {
+                this.renderer.UpdateFontTexture(update);
+            }
+        }
+        
+        private void RunPreRenderActions()
+        {
+            if (this.renderer == null)
+            {
+                return;
+            }
+
+            while (this.preRenderActions.TryDequeue(out var action))
+            {
+                action();
+            }
+        }
+        
+        private void RunPostRenderActions()
+        {
+            if (this.renderer == null)
+            {
+                return;
+            }
+
+            while (this.postRenderActions.TryDequeue(out var action))
+            {
+                action();
             }
         }
 
