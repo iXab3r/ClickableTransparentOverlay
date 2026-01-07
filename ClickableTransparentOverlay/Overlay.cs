@@ -32,7 +32,6 @@
         private readonly int initialWindowHeight;
         private readonly Dictionary<string, (IntPtr Handle, uint Width, uint Height)> loadedTexturesPtrs;
         private readonly ConcurrentQueue<FontHelper.FontLoadDelegate> fontUpdates;
-        private readonly ConcurrentQueue<Action> preRenderActions;
         private readonly ConcurrentQueue<Action> postRenderActions;
 
         private WNDCLASSEX wndClass;
@@ -161,7 +160,6 @@
             this.format = Format.R8G8B8A8_UNorm;
             this.loadedTexturesPtrs = new();
             this.fontUpdates = new();
-            this.preRenderActions = new();
             this.postRenderActions = new();
             if (DPIAware)
             {
@@ -324,15 +322,6 @@
         public void RunPostRenderOnce(Action action)
         {
             postRenderActions.Enqueue(action);
-        }
-        
-        /// <summary>
-        /// Runs specified action exactly once BEFORE frame is rendered
-        /// </summary>
-        /// <param name="action"></param>
-        public void RunPreRenderOnce(Action action)
-        {
-            preRenderActions.Enqueue(action);
         }
 
         /// <summary>
@@ -521,7 +510,6 @@
 
                 this.cancellationTokenSource?.Dispose();
                 this.fontUpdates?.Clear();
-                this.preRenderActions?.Clear();
                 this.postRenderActions?.Clear();
                 this.swapChain?.Release();
                 this.backBuffer?.Release();
@@ -575,8 +563,6 @@
                 Utils.SetShowInTaskbar(this.window.Handle, ShowInTaskbar, ref showInTaskbar);
                 Utils.SetNoActivate(this.window.Handle, NoActivate, ref noActivate);
 
-                this.RunPreRenderActions();
-                
                 this.renderer.Update(currentTimeSec, () => { Render(); });
                 this.deviceContext.OMSetRenderTargets(renderView);
                 this.deviceContext.ClearRenderTargetView(renderView, clearColor);
@@ -616,19 +602,6 @@
             while (this.fontUpdates.TryDequeue(out var update))
             {
                 this.renderer.UpdateFontTexture(update);
-            }
-        }
-        
-        private void RunPreRenderActions()
-        {
-            if (this.renderer == null)
-            {
-                return;
-            }
-
-            while (this.preRenderActions.TryDequeue(out var action))
-            {
-                action();
             }
         }
         
