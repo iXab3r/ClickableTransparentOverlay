@@ -18,7 +18,7 @@
     using Vortice.Mathematics;
     using Point = System.Drawing.Point;
     using Size = System.Drawing.Size;
-    using ImGuiNET;
+    using Hexa.NET.ImGui;
     using System.Collections.Concurrent;
 
     /// <summary>
@@ -265,38 +265,12 @@
                 };
 
                 io.Fonts.AddFontFromFileTTF(pathName, size, config, glyphRange);
-                ImGuiNative.igGetIO()->FontDefault = null;
+                ImGui.GetIO().FontDefault = null;
             });
 
             return true;
         }
 
-        /// <summary>
-        /// Replaces the ImGui font with another one.
-        /// </summary>
-        /// <param name="pathName">pathname to the TTF font file.</param>
-        /// <param name="size">font size to load.</param>
-        /// <param name="glyphRange">custom glyph range of the font to load. Read <see cref="FontGlyphRangeType"/> for more detail.</param>
-        /// <returns>>true if the font replacement is valid otherwise false.</returns>
-        public unsafe bool ReplaceFont(string pathName, int size, ushort[] glyphRange)
-        {
-            if (!File.Exists(pathName))
-            {
-                return false;
-            }
-
-            this.fontUpdates.Enqueue(config =>
-            {
-                var io = ImGui.GetIO();
-                fixed (ushort* p = &glyphRange[0])
-                {
-                    io.Fonts.AddFontFromFileTTF(pathName, size, config, new IntPtr(p));
-                    ImGuiNative.igGetIO()->FontDefault = null;
-                }
-            });
-
-            return true;
-        }
 
         /// <summary>
         /// Replaces the ImGui font with the default ImGui font.
@@ -308,7 +282,7 @@
             {
                 var io = ImGui.GetIO();
                 io.Fonts.AddFontDefault(config);
-                ImGuiNative.igGetIO()->FontDefault = null;
+                ImGui.GetIO().FontDefault = null;
             });
 
             return true;
@@ -333,7 +307,7 @@
             // have to do this because of issue: https://github.com/ocornut/imgui/issues/6858
             this.fontUpdates.Enqueue(config =>
             {
-                ImGuiNative.igGetIO()->FontDefault = null;
+                ImGui.GetIO().FontDefault = null;
                 fontLoadDelegate(config);
             });
             return true;
@@ -604,7 +578,7 @@
                 this.renderer.UpdateFontTexture(update);
             }
         }
-        
+
         private void RunPostRenderActions()
         {
             if (this.renderer == null)
