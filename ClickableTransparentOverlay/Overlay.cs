@@ -1,4 +1,9 @@
-﻿namespace ClickableTransparentOverlay
+﻿using System.Reflection;
+using System.Runtime.InteropServices;
+using System.Runtime.Loader;
+using HexaGen.Runtime;
+
+namespace ClickableTransparentOverlay
 {
     using ClickableTransparentOverlay.Win32;
     using SixLabors.ImageSharp;
@@ -26,6 +31,11 @@
     /// </summary>
     public abstract class Overlay : IDisposable
     {
+        static Overlay()
+        {
+            Win32.NativeWarmup.LoadByNameResolvePathThenLoadByFullPath("cimgui.dll");
+        }
+
         private readonly string title;
         private readonly Format format;
         private readonly int initialWindowWidth;
@@ -60,7 +70,7 @@
         private bool isClickable;
         private bool noActivate;
         private bool showInTaskbar = true; //that is the default state of the window
-
+        
         #region Constructors
 
         /// <summary>
