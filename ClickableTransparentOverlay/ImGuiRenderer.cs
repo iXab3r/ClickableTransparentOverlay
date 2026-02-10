@@ -1,6 +1,6 @@
 ﻿namespace ClickableTransparentOverlay
 {
-    using Hexa.NET.ImGui;
+    using ImGuiNET;
     using ImDrawIdx = System.UInt16;
     using Vortice.DXGI;
     using Vortice.Direct3D;
@@ -151,7 +151,7 @@
                 for (int i = 0; i < cmdList.CmdBuffer.Size; i++)
                 {
                     var cmd = cmdList.CmdBuffer[i];
-                    if (cmd.UserCallback != null)
+                    if (cmd.UserCallback != IntPtr.Zero)
                     {
                         throw new NotImplementedException("user callbacks not implemented");
                     }
@@ -163,7 +163,7 @@
                             (int)(cmd.ClipRect.Z - cmd.ClipRect.X),
                             (int)(cmd.ClipRect.W - cmd.ClipRect.Y));
 
-                        if (textureResources.TryGetValue(new IntPtr((long)cmd.GetTexID().Handle), out var texture))
+                        if (textureResources.TryGetValue(cmd.GetTexID(), out var texture))
                         {
                             ctx.PSSetShaderResource(0, texture);
                         }
@@ -227,12 +227,12 @@
         public void UpdateFontTexture(FontHelper.FontLoadDelegate fontLoadFunc)
         {
             var io = ImGui.GetIO();
-            this.DeRegisterTexture(new IntPtr((long)io.Fonts.TexID.Handle))?.Dispose();
+            this.DeRegisterTexture(io.Fonts.TexID)?.Dispose();
             io.Fonts.Clear();
-            var config = ImGui.ImFontConfig();
+            var config = ImGuiNative.ImFontConfig_ImFontConfig();
             fontLoadFunc(config);
             this.CreateFontsTexture();
-            config.Destroy();
+            ImGuiNative.ImFontConfig_destroy(config);
         }
 
         void SetupRenderState(ImDrawDataPtr drawData, ID3D11DeviceContext ctx)
@@ -261,11 +261,7 @@
         void CreateFontsTexture()
         {
             var io = ImGui.GetIO();
-            
-            byte* pixels = null;
-            int width = 0;
-            int height = 0;
-            io.Fonts.GetTexDataAsRGBA32(ref pixels, ref width, ref height);
+            io.Fonts.GetTexDataAsRGBA32(out byte* pixels, out var width, out var height);
             var texDesc = new Texture2DDescription(Format.R8G8B8A8_UNorm, width, height, 1, 1);
             var subResource = new SubresourceData(pixels, texDesc.Width * 4);
             using var texture = device.CreateTexture2D(texDesc, new[] { subResource });
@@ -275,8 +271,7 @@
                 Format.R8G8B8A8_UNorm,
                 0,
                 texDesc.MipLevels);
-            var texturePtr = RegisterTexture(device.CreateShaderResourceView(texture, resViewDesc));
-            io.Fonts.SetTexID(new ImTextureID(texturePtr));
+            io.Fonts.SetTexID(RegisterTexture(device.CreateShaderResourceView(texture, resViewDesc)));
             io.Fonts.ClearTexData();
         }
 

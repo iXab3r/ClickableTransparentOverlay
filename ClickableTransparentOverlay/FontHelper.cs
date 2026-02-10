@@ -1,6 +1,6 @@
 ﻿namespace ClickableTransparentOverlay
 {
-    using Hexa.NET.ImGui;
+    using ImGuiNET;
 
     public static class FontHelper
     {

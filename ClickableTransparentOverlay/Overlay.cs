@@ -1,9 +1,4 @@
-﻿using System.Reflection;
-using System.Runtime.InteropServices;
-using System.Runtime.Loader;
-using HexaGen.Runtime;
-
-namespace ClickableTransparentOverlay
+﻿namespace ClickableTransparentOverlay
 {
     using ClickableTransparentOverlay.Win32;
     using SixLabors.ImageSharp;
@@ -23,7 +18,7 @@ namespace ClickableTransparentOverlay
     using Vortice.Mathematics;
     using Point = System.Drawing.Point;
     using Size = System.Drawing.Size;
-    using Hexa.NET.ImGui;
+    using ImGuiNET;
     using System.Collections.Concurrent;
 
     /// <summary>
@@ -31,11 +26,6 @@ namespace ClickableTransparentOverlay
     /// </summary>
     public abstract class Overlay : IDisposable
     {
-        static Overlay()
-        {
-            Win32.NativeWarmup.LoadByNameResolvePathThenLoadByFullPath("cimgui.dll");
-        }
-
         private readonly string title;
         private readonly Format format;
         private readonly int initialWindowWidth;
@@ -70,7 +60,7 @@ namespace ClickableTransparentOverlay
         private bool isClickable;
         private bool noActivate;
         private bool showInTaskbar = true; //that is the default state of the window
-        
+
         #region Constructors
 
         /// <summary>
@@ -275,12 +265,38 @@ namespace ClickableTransparentOverlay
                 };
 
                 io.Fonts.AddFontFromFileTTF(pathName, size, config, glyphRange);
-                ImGui.GetIO().FontDefault = null;
+                ImGuiNative.igGetIO()->FontDefault = null;
             });
 
             return true;
         }
 
+        /// <summary>
+        /// Replaces the ImGui font with another one.
+        /// </summary>
+        /// <param name="pathName">pathname to the TTF font file.</param>
+        /// <param name="size">font size to load.</param>
+        /// <param name="glyphRange">custom glyph range of the font to load. Read <see cref="FontGlyphRangeType"/> for more detail.</param>
+        /// <returns>>true if the font replacement is valid otherwise false.</returns>
+        public unsafe bool ReplaceFont(string pathName, int size, ushort[] glyphRange)
+        {
+            if (!File.Exists(pathName))
+            {
+                return false;
+            }
+
+            this.fontUpdates.Enqueue(config =>
+            {
+                var io = ImGui.GetIO();
+                fixed (ushort* p = &glyphRange[0])
+                {
+                    io.Fonts.AddFontFromFileTTF(pathName, size, config, new IntPtr(p));
+                    ImGuiNative.igGetIO()->FontDefault = null;
+                }
+            });
+
+            return true;
+        }
 
         /// <summary>
         /// Replaces the ImGui font with the default ImGui font.
@@ -292,7 +308,7 @@ namespace ClickableTransparentOverlay
             {
                 var io = ImGui.GetIO();
                 io.Fonts.AddFontDefault(config);
-                ImGui.GetIO().FontDefault = null;
+                ImGuiNative.igGetIO()->FontDefault = null;
             });
 
             return true;
@@ -317,7 +333,7 @@ namespace ClickableTransparentOverlay
             // have to do this because of issue: https://github.com/ocornut/imgui/issues/6858
             this.fontUpdates.Enqueue(config =>
             {
-                ImGui.GetIO().FontDefault = null;
+                ImGuiNative.igGetIO()->FontDefault = null;
                 fontLoadDelegate(config);
             });
             return true;
@@ -588,7 +604,7 @@ namespace ClickableTransparentOverlay
                 this.renderer.UpdateFontTexture(update);
             }
         }
-
+        
         private void RunPostRenderActions()
         {
             if (this.renderer == null)
