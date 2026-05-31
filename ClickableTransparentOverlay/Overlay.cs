@@ -579,7 +579,9 @@
 
                     var inputSnapshot = this.inputhandler.Update();
 
-                    this.renderer.Update(currentTimeSec, () => { Render(); });
+                    this.renderer.BeginFrame(currentTimeSec);
+                    this.Render();
+                    this.renderer.EndFrame();
                     this.deviceContext.OMSetRenderTargets(renderView);
                     this.deviceContext.ClearRenderTargetView(renderView, clearColor);
                     this.renderer.Render();
@@ -634,10 +636,20 @@
                 this.NoActivate);
         }
 
-        private void ApplyWindowState(OverlayWindowState state)
+        private void ApplyWindowState(in OverlayWindowState state)
         {
+            if (this.IsWindowStateApplied(state))
+            {
+                return;
+            }
+
             lock (this.windowStateLock)
             {
+                if (this.IsWindowStateApplied(state))
+                {
+                    return;
+                }
+
                 if (this.window == null || this.window.Handle == IntPtr.Zero)
                 {
                     return;
@@ -648,6 +660,14 @@
                 Utils.SetShowInTaskbar(this.window.Handle, state.ShowInTaskbar, ref this.showInTaskbar);
                 Utils.SetNoActivate(this.window.Handle, state.NoActivate, ref this.noActivate);
             }
+        }
+
+        private bool IsWindowStateApplied(in OverlayWindowState state)
+        {
+            return this.isClickable == state.Clickable
+                   && this.windowOpacity == state.Opacity
+                   && this.showInTaskbar == state.ShowInTaskbar
+                   && this.noActivate == state.NoActivate;
         }
 
         private void MarkFramePresented()

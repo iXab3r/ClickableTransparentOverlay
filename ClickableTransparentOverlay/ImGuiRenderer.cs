@@ -17,7 +17,8 @@
 
     unsafe internal sealed class ImGuiRenderer : IDisposable
     {
-        const int VertexConstantBufferSize = 16 * 4;
+        const int VertexConstantBufferFloatCount = 16;
+        const int VertexConstantBufferSize = VertexConstantBufferFloatCount * 4;
 
         ID3D11Device device;
         ID3D11DeviceContext deviceContext;
@@ -54,12 +55,15 @@
             this.CreateDeviceObjects();
         }
 
-        public void Update(float deltaTime, Action DoRender)
+        public void BeginFrame(float deltaTime)
         {
             var io = ImGui.GetIO();
             io.DeltaTime = deltaTime;
             ImGui.NewFrame();
-            DoRender?.Invoke();
+        }
+
+        public void EndFrame()
+        {
             ImGui.Render();
         }
 
@@ -125,19 +129,27 @@
             // Our visible imgui space lies from draw_data.DisplayPos (top left) to draw_data.DisplayPos+data_data.DisplaySize (bottom right). DisplayPos is (0,0) for single viewport apps.
 
             var constResource = ctx.Map(constantBuffer, 0, MapMode.WriteDiscard, Vortice.Direct3D11.MapFlags.None);
-            var span = constResource.AsSpan<float>(VertexConstantBufferSize);
+            var span = constResource.AsSpan<float>(VertexConstantBufferFloatCount);
             float L = data.DisplayPos.X;
             float R = data.DisplayPos.X + data.DisplaySize.X;
             float T = data.DisplayPos.Y;
             float B = data.DisplayPos.Y + data.DisplaySize.Y;
-            float[] mvp =
-            {
-                    2.0f/(R-L),   0.0f,           0.0f,       0.0f,
-                    0.0f,         2.0f/(T-B),     0.0f,       0.0f,
-                    0.0f,         0.0f,           0.5f,       0.0f,
-                    (R+L)/(L-R),  (T+B)/(B-T),    0.5f,       1.0f,
-            };
-            mvp.CopyTo(span);
+            span[0] = 2.0f / (R - L);
+            span[1] = 0.0f;
+            span[2] = 0.0f;
+            span[3] = 0.0f;
+            span[4] = 0.0f;
+            span[5] = 2.0f / (T - B);
+            span[6] = 0.0f;
+            span[7] = 0.0f;
+            span[8] = 0.0f;
+            span[9] = 0.0f;
+            span[10] = 0.5f;
+            span[11] = 0.0f;
+            span[12] = (R + L) / (L - R);
+            span[13] = (T + B) / (B - T);
+            span[14] = 0.5f;
+            span[15] = 1.0f;
             ctx.Unmap(constantBuffer, 0);
             //BackupDX11State(ctx); // only required if imgui is injected + drawn on existing process.
             SetupRenderState(data, ctx);
