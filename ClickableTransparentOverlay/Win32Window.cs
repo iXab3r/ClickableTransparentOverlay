@@ -28,8 +28,9 @@
 
         public void Dispose()
         {
-            if (this.Handle != IntPtr.Zero && User32.DestroyWindow(this.Handle))
+            if (this.Handle != IntPtr.Zero)
             {
+                _ = User32.DestroyWindow(this.Handle);
                 this.Handle = IntPtr.Zero;
             }
 

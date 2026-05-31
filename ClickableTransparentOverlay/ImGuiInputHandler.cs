@@ -14,7 +14,7 @@
             this.hwnd = hwnd;
         }
 
-        public bool Update()
+        public ImGuiInputSnapshot Update()
         {
             var io = ImGui.GetIO();
             UpdateMousePosition(io, hwnd);
@@ -38,7 +38,10 @@
                 }
             }
 
-            return io.WantCaptureMouse;
+            return new ImGuiInputSnapshot(
+                io.WantCaptureMouse,
+                io.WantCaptureKeyboard,
+                io.WantTextInput);
         }
 
         public bool ProcessMessage(WindowMessage msg, UIntPtr wParam, IntPtr lParam)
@@ -231,5 +234,23 @@
         private static int GET_WHEEL_DELTA_WPARAM(UIntPtr wParam) => Utils.Hiword((int)wParam);
 
         private static int GET_XBUTTON_WPARAM(UIntPtr wParam) => Utils.Hiword((int)wParam);
+    }
+
+    internal readonly struct ImGuiInputSnapshot
+    {
+        public ImGuiInputSnapshot(bool wantsMouse, bool wantsKeyboard, bool wantsTextInput)
+        {
+            this.WantsMouse = wantsMouse;
+            this.WantsKeyboard = wantsKeyboard;
+            this.WantsTextInput = wantsTextInput;
+        }
+
+        public bool WantsMouse { get; }
+
+        public bool WantsKeyboard { get; }
+
+        public bool WantsTextInput { get; }
+
+        public bool WantsInput => this.WantsMouse || this.WantsKeyboard || this.WantsTextInput;
     }
 }

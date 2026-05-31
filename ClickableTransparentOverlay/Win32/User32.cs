@@ -1116,6 +1116,9 @@
         [DllImport("user32.dll", SetLastError = true)]
         private static extern uint SetWindowLongPtr(IntPtr hWnd, int nIndex, uint value);
 
+        [return: MarshalAs(UnmanagedType.Bool)]
+        [DllImport(LibraryName, SetLastError = true)]
+        private static extern bool SetLayeredWindowAttributes(IntPtr hwnd, uint crKey, byte bAlpha, uint dwFlags);
         public static uint SetWindowLong(IntPtr hWnd, int nIndex, uint value)
         {
             if (IntPtr.Size == 4)
@@ -1147,6 +1150,15 @@
         [DllImport(LibraryName, ExactSpelling = true)]
         public static extern bool ShowWindow(IntPtr hWnd, ShowWindowCommand nCmdShow);
 
+        [return: MarshalAs(UnmanagedType.Bool)]
+        [DllImport(LibraryName)]
+        private static extern bool IsWindow(IntPtr hWnd);
+
+        public static bool IsWindowValid(IntPtr hwnd)
+        {
+            return hwnd != IntPtr.Zero && IsWindow(hwnd);
+        }
+
         [DllImport(LibraryName)]
         public static extern IntPtr SetCursor(IntPtr handle);
 
@@ -1175,17 +1187,40 @@
         private const uint WS_EX_NOACTIVATE = 0x08000000;
         private const uint WS_EX_TRANSPARENT = 0x00000020;
         private const uint WS_EX_LAYERED = 0x00080000;
+        private const uint LWA_ALPHA = 0x00000002;
+
+        /// <summary>
+        /// Sets the opacity of the specified layered window.
+        /// </summary>
+        /// <param name="hwnd">The handle of the window.</param>
+        /// <param name="opacity">Window opacity, from 0 fully transparent to 255 fully opaque.</param>
+        public static bool SetWindowOpacity(IntPtr hwnd, byte opacity)
+        {
+            if (!IsWindowValid(hwnd))
+            {
+                return false;
+            }
+
+            uint exStyle = GetWindowLongPtr(hwnd, GWL_EXSTYLE);
+            uint newStyle = exStyle | WS_EX_LAYERED;
+            if (newStyle != exStyle)
+            {
+                SetWindowLongPtr(hwnd, GWL_EXSTYLE, newStyle);
+            }
+
+            return SetLayeredWindowAttributes(hwnd, 0, opacity, LWA_ALPHA);
+        }
         
         /// <summary>
         /// Sets whether the specified window allows mouse click-through (transparent to mouse events).
         /// </summary>
         /// <param name="hwnd">The handle of the window.</param>
         /// <param name="clickThrough">True to make the window ignore mouse input; false to make it clickable.</param>
-        public static void SetWindowClickThrough(IntPtr hwnd, bool clickThrough)
+        public static bool SetWindowClickThrough(IntPtr hwnd, bool clickThrough)
         {
-            if (hwnd == IntPtr.Zero)
+            if (!IsWindowValid(hwnd))
             {
-                throw new ArgumentException("Invalid window handle.");
+                return false;
             }
 
             uint exStyle = GetWindowLongPtr(hwnd, GWL_EXSTYLE);
@@ -1204,6 +1239,8 @@
             {
                 SetWindowLongPtr(hwnd, GWL_EXSTYLE, newStyle);
             }
+
+            return true;
         }
         
         /// <summary>
@@ -1211,11 +1248,11 @@
         /// </summary>
         /// <param name="hwnd">The handle of the window.</param>
         /// <param name="visible">True to show in the taskbar, false to hide.</param>
-        public static void SetTaskbarVisibility(IntPtr hwnd, bool visible)
+        public static bool SetTaskbarVisibility(IntPtr hwnd, bool visible)
         {
-            if (hwnd == IntPtr.Zero)
+            if (!IsWindowValid(hwnd))
             {
-                throw new ArgumentException("Invalid window handle.");
+                return false;
             }
 
             uint stylePtr = GetWindowLongPtr(hwnd, GWL_EXSTYLE);
@@ -1235,6 +1272,8 @@
             {
                 SetWindowLongPtr(hwnd, GWL_EXSTYLE, newStyle);
             }
+
+            return true;
         }
 
         /// <summary>
@@ -1242,11 +1281,11 @@
         /// </summary>
         /// <param name="hwnd">The handle of the window.</param>
         /// <param name="allowActivation">True to allow activation (default window behavior), false to suppress it.</param>
-        public static void SetWindowActivationEnabled(IntPtr hwnd, bool allowActivation)
+        public static bool SetWindowActivationEnabled(IntPtr hwnd, bool allowActivation)
         {
-            if (hwnd == IntPtr.Zero)
+            if (!IsWindowValid(hwnd))
             {
-                throw new ArgumentException("Invalid window handle.");
+                return false;
             }
 
             uint stylePtr = GetWindowLongPtr(hwnd, GWL_EXSTYLE);
@@ -1266,6 +1305,8 @@
             {
                 SetWindowLongPtr(hwnd, GWL_EXSTYLE, newStyle);
             }
+
+            return true;
         }
     }
 }

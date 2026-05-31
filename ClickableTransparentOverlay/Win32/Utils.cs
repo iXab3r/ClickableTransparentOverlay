@@ -74,8 +74,21 @@
         {
             if (IsClickable ^ WantClickable)
             {
-                User32.SetWindowClickThrough(handle, !WantClickable);
-                IsClickable = WantClickable;
+                if (User32.SetWindowClickThrough(handle, !WantClickable))
+                {
+                    IsClickable = WantClickable;
+                }
+            }
+        }
+
+        internal static void SetWindowOpacity(IntPtr handle, byte WantOpacity, ref byte ActualOpacity)
+        {
+            if (ActualOpacity != WantOpacity)
+            {
+                if (User32.SetWindowOpacity(handle, WantOpacity))
+                {
+                    ActualOpacity = WantOpacity;
+                }
             }
         }
         
@@ -83,8 +96,10 @@
         {
             if (ActualShowInTaskbar ^ WantShowInTaskbar)
             {
-                User32.SetTaskbarVisibility(handle, WantShowInTaskbar);
-                ActualShowInTaskbar = WantShowInTaskbar;
+                if (User32.SetTaskbarVisibility(handle, WantShowInTaskbar))
+                {
+                    ActualShowInTaskbar = WantShowInTaskbar;
+                }
             }
         }
         
@@ -92,8 +107,10 @@
         {
             if (ActualNoActivate ^ WantNoActivate)
             {
-                User32.SetWindowActivationEnabled(handle, !WantNoActivate);
-                ActualNoActivate = WantNoActivate;
+                if (User32.SetWindowActivationEnabled(handle, !WantNoActivate))
+                {
+                    ActualNoActivate = WantNoActivate;
+                }
             }
         }
     }

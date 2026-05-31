@@ -26,6 +26,11 @@
     /// </summary>
     public abstract class Overlay : IDisposable
     {
+        private const int HangTimeoutMilliseconds = 3000;
+        private const int HangWatchdogPeriodMilliseconds = 250;
+        private const byte NormalWindowOpacity = byte.MaxValue;
+        private const byte HungWindowOpacity = 26;
+
         private readonly string title;
         private readonly Format format;
         private readonly int initialWindowWidth;
@@ -33,6 +38,7 @@
         private readonly Dictionary<string, (IntPtr Handle, uint Width, uint Height)> loadedTexturesPtrs;
         private readonly ConcurrentQueue<FontHelper.FontLoadDelegate> fontUpdates;
         private readonly ConcurrentQueue<Action> postRenderActions;
+        private readonly object windowStateLock = new();
 
         private WNDCLASSEX wndClass;
 
@@ -60,6 +66,10 @@
         private bool isClickable;
         private bool noActivate;
         private bool showInTaskbar = true; //that is the default state of the window
+        private byte windowOpacity = NormalWindowOpacity;
+        private Timer? hangWatchdogTimer;
+        private long lastPresentedTimestamp;
+        private int hangWatchdogTickInProgress;
 
         #region Constructors
 
@@ -168,7 +178,7 @@
         }
 
         /// <summary>
-        /// Gets or sets a value indicating whether the window should be click-through (i.e., not interactable).
+        /// Gets or sets a value indicating whether the overlay is allowed to become clickable when ImGui wants input.
         /// </summary>
         public bool IsClickable { get; set; } = true;
 
@@ -502,6 +512,7 @@
                     Winmm.MM_EndPeriod(1);
                 }
 
+                this.DisposeHangWatchdogTimer();
                 this.renderThread?.Join();
                 foreach (var key in this.loadedTexturesPtrs.Keys.ToArray())
                 {
@@ -554,42 +565,171 @@
             var clearColor = new Color4(0.0f);
             var delayMs = 0f;
             var sleepTimeMs = 0;
-            while (!token.IsCancellationRequested)
+            try
             {
-                currentTimeSec = stopwatch.ElapsedTicks / (float) Stopwatch.Frequency;
-                stopwatch.Restart();
-                this.window.PumpEvents();
-                Utils.SetOverlayClickable(this.window.Handle, this.inputhandler.Update(), ref isClickable);
-                Utils.SetShowInTaskbar(this.window.Handle, ShowInTaskbar, ref showInTaskbar);
-                Utils.SetNoActivate(this.window.Handle, NoActivate, ref noActivate);
-
-                this.renderer.Update(currentTimeSec, () => { Render(); });
-                this.deviceContext.OMSetRenderTargets(renderView);
-                this.deviceContext.ClearRenderTargetView(renderView, clearColor);
-                this.renderer.Render();
-                if (VSync)
+                while (!token.IsCancellationRequested)
                 {
-                    this.swapChain.Present(1, PresentFlags.None); // Present with vsync
-                }
-                else if (this.FPSLimit > 0)
-                {
-                    this.swapChain.Present(0, PresentFlags.None);
-                    delayMs = 1000f / this.FPSLimit;
                     currentTimeSec = stopwatch.ElapsedTicks / (float) Stopwatch.Frequency;
-                    sleepTimeMs = (int) (delayMs - (currentTimeSec * 1000));
-                    if (sleepTimeMs > 0)
+                    stopwatch.Restart();
+                    this.window.PumpEvents();
+                    if (token.IsCancellationRequested || !User32.IsWindowValid(this.window.Handle))
                     {
-                        Thread.Sleep(sleepTimeMs);
+                        break;
                     }
+
+                    var inputSnapshot = this.inputhandler.Update();
+
+                    this.renderer.Update(currentTimeSec, () => { Render(); });
+                    this.deviceContext.OMSetRenderTargets(renderView);
+                    this.deviceContext.ClearRenderTargetView(renderView, clearColor);
+                    this.renderer.Render();
+                    if (VSync)
+                    {
+                        this.swapChain.Present(1, PresentFlags.None); // Present with vsync
+                    }
+                    else
+                    {
+                        this.swapChain.Present(0, PresentFlags.None); // Present without vsync
+                    }
+
+                    this.MarkFramePresented();
+                    this.ApplyWindowState(this.CreateNormalWindowState(inputSnapshot));
+
+                    if (!VSync && this.FPSLimit > 0)
+                    {
+                        delayMs = 1000f / this.FPSLimit;
+                        currentTimeSec = stopwatch.ElapsedTicks / (float) Stopwatch.Frequency;
+                        sleepTimeMs = (int) (delayMs - (currentTimeSec * 1000));
+                        if (sleepTimeMs > 0)
+                        {
+                            Thread.Sleep(sleepTimeMs);
+                        }
+                    }
+
+                    this.RunPostRenderActions();
+                    this.ReplaceFontIfRequired();
                 }
-                else
+            }
+            finally
+            {
+                this.DisposeHangWatchdogTimer();
+            }
+        }
+
+        private OverlayWindowState CreateNormalWindowState(ImGuiInputSnapshot inputSnapshot)
+        {
+            return new OverlayWindowState(
+                this.IsClickable && inputSnapshot.WantsInput,
+                NormalWindowOpacity,
+                this.ShowInTaskbar,
+                this.NoActivate);
+        }
+
+        private OverlayWindowState CreateHungWindowState()
+        {
+            return new OverlayWindowState(
+                false,
+                HungWindowOpacity,
+                this.ShowInTaskbar,
+                this.NoActivate);
+        }
+
+        private void ApplyWindowState(OverlayWindowState state)
+        {
+            lock (this.windowStateLock)
+            {
+                if (this.window == null || this.window.Handle == IntPtr.Zero)
                 {
-                    this.swapChain.Present(0, PresentFlags.None); // Present without vsync
+                    return;
                 }
 
-                this.RunPostRenderActions();
-                this.ReplaceFontIfRequired();
+                Utils.SetOverlayClickable(this.window.Handle, state.Clickable, ref this.isClickable);
+                Utils.SetWindowOpacity(this.window.Handle, state.Opacity, ref this.windowOpacity);
+                Utils.SetShowInTaskbar(this.window.Handle, state.ShowInTaskbar, ref this.showInTaskbar);
+                Utils.SetNoActivate(this.window.Handle, state.NoActivate, ref this.noActivate);
             }
+        }
+
+        private void MarkFramePresented()
+        {
+            Volatile.Write(ref this.lastPresentedTimestamp, Stopwatch.GetTimestamp());
+        }
+
+        private void StartHangWatchdogTimer()
+        {
+            this.MarkFramePresented();
+            this.hangWatchdogTimer = new Timer(
+                this.OnHangWatchdogTimer,
+                null,
+                HangWatchdogPeriodMilliseconds,
+                HangWatchdogPeriodMilliseconds);
+        }
+
+        private void OnHangWatchdogTimer(object? state)
+        {
+            if (Interlocked.Exchange(ref this.hangWatchdogTickInProgress, 1) != 0)
+            {
+                return;
+            }
+
+            try
+            {
+                var lastPresented = Volatile.Read(ref this.lastPresentedTimestamp);
+                if (!this.overlayIsReady || lastPresented == 0)
+                {
+                    return;
+                }
+
+                var elapsedMilliseconds = (Stopwatch.GetTimestamp() - lastPresented) * 1000.0 / Stopwatch.Frequency;
+                if (elapsedMilliseconds <= HangTimeoutMilliseconds)
+                {
+                    return;
+                }
+
+                this.ApplyWindowState(this.CreateHungWindowState());
+            }
+            catch
+            {
+                // Timer callbacks must not escape exceptions onto the ThreadPool.
+            }
+            finally
+            {
+                Interlocked.Exchange(ref this.hangWatchdogTickInProgress, 0);
+            }
+        }
+
+        private void DisposeHangWatchdogTimer()
+        {
+            var timer = Interlocked.Exchange(ref this.hangWatchdogTimer, null);
+            if (timer == null)
+            {
+                return;
+            }
+
+            using var disposed = new ManualResetEvent(false);
+            if (timer.Dispose(disposed))
+            {
+                disposed.WaitOne();
+            }
+        }
+
+        private readonly struct OverlayWindowState
+        {
+            public OverlayWindowState(bool clickable, byte opacity, bool showInTaskbar, bool noActivate)
+            {
+                this.Clickable = clickable;
+                this.Opacity = opacity;
+                this.ShowInTaskbar = showInTaskbar;
+                this.NoActivate = noActivate;
+            }
+
+            public bool Clickable { get; }
+
+            public byte Opacity { get; }
+
+            public bool ShowInTaskbar { get; }
+
+            public bool NoActivate { get; }
         }
 
         private void ReplaceFontIfRequired()
@@ -700,7 +840,12 @@
             await this.PostInitialized();
             User32.ShowWindow(this.window.Handle, ShowWindowCommand.Show);
             Utils.InitTransparency(this.window.Handle);
-            Utils.SetOverlayClickable(this.window.Handle, true, ref isClickable);
+            this.isClickable = true;
+            this.windowOpacity = NormalWindowOpacity;
+            this.showInTaskbar = true;
+            this.noActivate = false;
+            this.ApplyWindowState(new OverlayWindowState(this.IsClickable, NormalWindowOpacity, this.ShowInTaskbar, this.NoActivate));
+            this.StartHangWatchdogTimer();
         }
 
         private bool ProcessMessage(WindowMessage msg, UIntPtr wParam, IntPtr lParam)
