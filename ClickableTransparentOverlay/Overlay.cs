@@ -621,7 +621,12 @@
         private OverlayWindowState CreateNormalWindowState(ImGuiInputSnapshot inputSnapshot)
         {
             return new OverlayWindowState(
-                this.IsClickable && inputSnapshot.WantsInput,
+                // Click-through is a mouse-only concern: WS_EX_TRANSPARENT affects mouse hit-testing,
+                // not keyboard. Gating on WantsInput (mouse||keyboard||text) kept the overlay clickable
+                // whenever ImGui held keyboard/nav focus, so after interacting with a focused window the
+                // next click on empty space was swallowed by the overlay; only the second click (which
+                // had cleared ImGui focus) passed through. Gate on mouse capture only.
+                this.IsClickable && inputSnapshot.WantsMouse,
                 NormalWindowOpacity,
                 this.ShowInTaskbar,
                 this.NoActivate);
