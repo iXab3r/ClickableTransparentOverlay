@@ -1,4 +1,6 @@
 # Clickable Transparent Overlay
+
+EyeAuras fork guidance: [AGENTS.md](AGENTS.md). The active fork uses package identity `EyeAuras.ClickableTransparentOverlay`; see the [project](ClickableTransparentOverlay/ClickableTransparentOverlay.csproj) and [local examples](Examples). Upstream package/sample links below are retained as references.
 CTO is a library for creating transparent overlay using Win32 API and ImGui.
 
 # How to Use
